@@ -2,6 +2,6 @@
     "FILE_EXT": ".7z",
     "FILE_NAME": "BACKUP_",
     "FILE_ENU": "",
-    "SOURCE_FOLDER": "./",
-    "DEST_FOLDER": "./"
+    "SOURCE_FOLDER": "C:/###Games/CataDDA/bn/current/save",
+    "DEST_FOLDER": "C:/###Games/CataDDA/bn/current"
 }
