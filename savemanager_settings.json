@@ -3,5 +3,9 @@
     "FILE_NAME": "BACKUP_",
     "FILE_ENU": "",
     "SOURCE_FOLDER": "C:/###Games/CataDDA/bn/current/save",
-    "DEST_FOLDER": "C:/###Games/CataDDA/bn_save_backups"
+    "DEST_FOLDER": "C:/###Games/CataDDA/bn_save_backups",
+    "SHOW_DEBUG": true,
+    "X_POS": 0,
+    "Y_POS": 0,
+    "SAFETY_BACKUP": "SAFETY_BACKUP.7z"
 }

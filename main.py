@@ -1,6 +1,7 @@
 import __future__
 from ast import dump
-from msilib.schema import Directory
+from distutils import filelist
+from msilib.schema import Error
 import PySimpleGUI as sg
 import os
 import py7zr
@@ -8,6 +9,7 @@ import json
 from datetime import datetime
 import time
 import inspect
+from shutil import rmtree
 
 
 def dump_args(func):
@@ -15,16 +17,25 @@ def dump_args(func):
     Decorator to print function call details.
     This includes parameters names and effective values.
     """
+
     def wrapper(*args, **kwargs):
-        func_args = inspect.signature(func).bind(*args, **kwargs).arguments
-        func_args_str = ", ".join(map("{0[0]} = {0[1]!r}".format, func_args.items()))
-        print(f"{func.__module__}.{func.__qualname__} ( {func_args_str} )")
+        if 'SHOW_DEBUG' not in settings or settings['SHOW_DEBUG']:
+            func_args = inspect.signature(func).bind(*args, **kwargs).arguments
+            func_args_str = ", ".join(map("{0[0]} = {0[1]!r}".format, func_args.items()))
+            print(f"{func.__module__}.{func.__qualname__} ( {func_args_str} )")
         return func(*args, **kwargs)
 
     return wrapper
 
 
 def set_layout():
+    info = [
+        [
+            sg.Text('', key='-SIZE-', auto_size_text=True),
+
+        ]
+    ]
+
     source = [
         [
             sg.Text("Source Folder     "),
@@ -44,6 +55,7 @@ def set_layout():
     backup = [[sg.Button("BACKUP", enable_events=True, key="-BACKUP-")]]
 
     restore = [[sg.Button("RESTORE", enable_events=True, key="-RESTORE-")]]
+    restore_latest = [[sg.Button("RESTORE LATEST", enable_events=True, key="-RESTORE_LATEST-")]]
 
     log_output = [
         [
@@ -62,11 +74,19 @@ def set_layout():
             sg.Column(backup),
             sg.VSeperator(),
             sg.Column(restore),
+            sg.VSeparator(),            
+            sg.Column(restore_latest),
+            sg.VSeparator(),
+            sg.Column(info)
         ],
         [sg.HorizontalSeparator()],
         [
             sg.Listbox(
-                values=[], enable_events=True, size=(120, 10), key="-BACKUP LIST-"
+                values=[],
+                enable_events=True,
+                size=(120, 20),
+                key="-BACKUP LIST-",
+                # autoscroll=True,
             )
         ],
         [sg.HorizontalSeparator()],
@@ -78,31 +98,51 @@ def set_layout():
     return layout
 
 
-# sg.theme("Dark")  # Add a touch of color
 settings = {}
-sg.ChangeLookAndFeel("Black")  # Add a touch of color
+sg.ChangeLookAndFeel("Black")
 settings_filename = "./savemanager_settings.json"
 window = sg.Window("Save Manager", set_layout())
 window.Font = ("Consolas", 8)
 window.finalize()
 
 
-# @dump_args
+@dump_args
 def now():
     return datetime.now().strftime("%H:%M:%S")
 
 
-# @dump_args
-def log(text):
-    lines = text.split("\n")
-    window["-LOG-"].print(f"{now()} | {lines[0]}")
-    for line in lines[1:]:
-        window["-LOG-"].print(f"         | {line}")
-    window["-LOG-"].update()
-    window.refresh()
+@dump_args
+def log(text, debug=False):
+    if debug == False or (debug == True and settings['SHOW_DEBUG'] == True):
+        lines = text.split("\n")
+        window["-LOG-"].print(f"{now()} | {lines[0]}")
+        for line in lines[1:]:
+            window["-LOG-"].print(f"         | {line}")
+        window["-LOG-"].update()
+        window.refresh()
 
 
-# @dump_args
+@dump_args
+def sizeof_fmt(num, suffix="B"):
+    # https://stackoverflow.com/a/1094933/9267296
+    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+        if abs(num) < 1024.0:
+            return f"{num:3.1f}{unit}{suffix}"
+        num /= 1024.0
+    return f"{num:.1f}Yi{suffix}"
+
+
+@dump_args
+def update_size():
+    size = 0
+    for path, dirs, files in os.walk(settings['SOURCE_FOLDER']):
+        for f in files:
+            fp = os.path.join(path, f)
+            size += os.path.getsize(fp)
+    window['-SIZE-'].update(f'Folder size: {sizeof_fmt(size)}')
+
+
+@dump_args
 def load_settings(filename=settings_filename):
     global settings
     log(f"Loading settings from {filename}")
@@ -111,7 +151,7 @@ def load_settings(filename=settings_filename):
     # log(f"SETTINGS = \n{json.dumps(settings, indent=4)}")
 
 
-# @dump_args
+@dump_args
 def save_settings(filename=settings_filename):
     log(f"Saving settings to {filename}")
     with open(filename, "w") as outfile:
@@ -119,7 +159,7 @@ def save_settings(filename=settings_filename):
     # log(f"SETTINGS = \n{json.dumps(settings, indent=4)}")
 
 
-# @dump_args
+@dump_args
 def settings_init():
     if os.path.exists(settings_filename):
         load_settings()
@@ -132,18 +172,22 @@ def settings_init():
             "FILE_ENU": "",
             "SOURCE_FOLDER": "./",
             "DEST_FOLDER": "./",
+            "SHOW_DEBUG": True,
+            "X_POS": 0,
+            "Y_POS": 0,
+            "SAFETY_BACKUP": "SAFETY_BACKUP.7z"
         }
         save_settings()
 
 
-# @dump_args
+@dump_args
 def create_backup(filename, extralog=""):
     logstr = "Starting backup, application might freeze a bit..."
     if extralog != "":
         logstr = extralog + "\n" + logstr
     log(logstr)
     directory = settings["SOURCE_FOLDER"]
-    with py7zr.SevenZipFile(filename, "w") as outfile:
+    with py7zr.SevenZipFile(filename, "w") as archive:
         rootdir = os.path.basename(directory)
         for dirpath, dirnames, filenames in os.walk(directory):
             for filename in filenames:
@@ -151,11 +195,11 @@ def create_backup(filename, extralog=""):
                 parentpath = os.path.relpath(filepath, directory)
                 arcname = os.path.join(rootdir, parentpath)
                 # log(f"Adding: {filepath}")
-                outfile.write(filepath, arcname)
+                archive.write(filepath, arcname)
     get_current_backups()
 
 
-# @dump_args
+@dump_args
 def add_new_backup():
     newbackupname = increase(get_current_highest())
     start = time.time()
@@ -166,7 +210,36 @@ def add_new_backup():
     log(f"Backup done.\nTime elapsed: {time.time()-start:.2f} seconds")
 
 
-# @dump_args
+@dump_args
+def restore_backup(filename: str):
+    start = time.time()
+    if os.path.exists(filename):
+        if os.path.exists(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}"):
+            os.remove(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}")
+        create_backup(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}", extralog=f'Creating safety backup: {settings["SAFETY_BACKUP"]}')
+    else:
+        log(f"File: {filename} not found.")
+        return
+    log(f"Deleting existing directory: {settings['SOURCE_FOLDER']}")
+    # print(f"Deleting existing directory: {settings['SOURCE_FOLDER']}")
+    # exit(0)
+    try:
+        rmtree(settings['SOURCE_FOLDER'])
+    except Exception as e:
+        print(e)
+    log(f"Restoring backup: {filename}")
+    old_cwd = os.getcwd()
+    os.chdir(f"{settings['SOURCE_FOLDER']}{os.sep}..")
+    # print(os.getcwd())
+    with py7zr.SevenZipFile(f"{filename}", 'r') as archive:
+        archive.extractall()
+    log(f"Backup restored.\nTime elapsed: {time.time()-start:.2f} seconds")
+    os.chdir(old_cwd)
+
+
+
+
+@dump_args
 def get_current_backups() -> list:
     result = [
         filename
@@ -176,44 +249,53 @@ def get_current_backups() -> list:
             and filename.lower().endswith(settings["FILE_EXT"].lower())
         )
     ]
+    result.sort(reverse=True)
+    if os.path.exists(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}"):
+        result.insert(0, settings['SAFETY_BACKUP'])
     window["-BACKUP LIST-"].update(result)
+    update_size()
     window.refresh()
     return result
 
 
-# @dump_args
+@dump_args
 def get_number(filename: str) -> int:
     return filename.split(settings["FILE_NAME"])[1].split(settings["FILE_EXT"])[0]
 
 
-# @dump_args
+@dump_args
 def increase(filename: str) -> str:
     nr = 1 + int(
         filename.split(settings["FILE_NAME"])[1].split(settings["FILE_EXT"])[0]
     )
-    return f"{filename.split(settings['FILE_NAME'])[0]}{settings['FILE_NAME']}{nr}{settings['FILE_EXT']}"
+    return f"{filename.split(settings['FILE_NAME'])[0]}{settings['FILE_NAME']}{nr:03}{settings['FILE_EXT']}"
 
 
-# @dump_args
+@dump_args
 def get_current_highest() -> str:
     highest = f"{settings['FILE_NAME']}-1{settings['FILE_EXT']}"
-    for filename in get_current_backups():
+    filelist = get_current_backups()
+    filelist.remove(settings['SAFETY_BACKUP'])
+    for filename in filelist:
         if get_number(filename) > get_number(highest):
             highest = filename
     return highest
 
 
-# @dump_args
+@dump_args
 def main():
     global settings
     settings_init()
     window["-SOURCE-"].update(settings["SOURCE_FOLDER"])
     window["-DEST-"].update(settings["DEST_FOLDER"])
     get_current_backups()
+    # window.current_location((settings['X_POS'], settings['Y_POS']))
 
     while True:
         event, values = window.read()
         if event == "Exit" or event == sg.WIN_CLOSED:
+            # settings['X_POS'] = window.current_location()[0]
+            # settings['Y_POS'] = window.current_location()[1]
             break
 
         elif event == "-BACKUP-":
@@ -221,12 +303,13 @@ def main():
             add_new_backup()
 
         elif event == "-RESTORE-":
-            # restore previous backupp
-            pass
+            # restore previous backup
+            file = sg.popup_get_file("Select backup to restore", initial_folder=settings['DEST_FOLDER'], no_window=True)#, file_types=settings['FILE_EXT']
+            restore_backup(file) 
 
-        elif event == "-EVENTGOESHERE-":
-            pass
-
+        elif event == "-RESTORE_LATEST-":
+            restore_backup(f"{settings['DEST_FOLDER']}{os.sep}{get_current_highest()}")
+            
         elif event == "-EVENTGOESHERE-":
             pass
 
