@@ -1,31 +1,12 @@
-import __future__
-from ast import dump
-from distutils import filelist
-from msilib.schema import Error
+from xmlrpc.client import Boolean
 import PySimpleGUI as sg
 import os
 import py7zr
 import json
 from datetime import datetime
 import time
-import inspect
-from shutil import rmtree
-
-
-def dump_args(func):
-    """
-    Decorator to print function call details.
-    This includes parameters names and effective values.
-    """
-
-    def wrapper(*args, **kwargs):
-        if 'SHOW_DEBUG' not in settings or settings['SHOW_DEBUG']:
-            func_args = inspect.signature(func).bind(*args, **kwargs).arguments
-            func_args_str = ", ".join(map("{0[0]} = {0[1]!r}".format, func_args.items()))
-            print(f"{func.__module__}.{func.__qualname__} ( {func_args_str} )")
-        return func(*args, **kwargs)
-
-    return wrapper
+from shutil import rmtree, copytree
+from eakse.common import dump_args
 
 
 def set_layout():
@@ -56,6 +37,8 @@ def set_layout():
 
     restore = [[sg.Button("RESTORE", enable_events=True, key="-RESTORE-")]]
     restore_latest = [[sg.Button("RESTORE LATEST", enable_events=True, key="-RESTORE_LATEST-")]]
+    make_backup = [[sg.Checkbox('CREATE BACKUP', default=True, key="-MAKE_BACKUP-")]]
+
 
     log_output = [
         [
@@ -76,6 +59,8 @@ def set_layout():
             sg.Column(restore),
             sg.VSeparator(),            
             sg.Column(restore_latest),
+            sg.VSeparator(),
+            sg.Column(make_backup),
             sg.VSeparator(),
             sg.Column(info)
         ],
@@ -148,6 +133,7 @@ def load_settings(filename=settings_filename):
     log(f"Loading settings from {filename}")
     with open(filename) as infile:
         settings = json.load(infile)
+    log('------------------------------------------------------------------------------------------------------------------------')
     # log(f"SETTINGS = \n{json.dumps(settings, indent=4)}")
 
 
@@ -156,6 +142,7 @@ def save_settings(filename=settings_filename):
     log(f"Saving settings to {filename}")
     with open(filename, "w") as outfile:
         json.dump(settings, outfile, indent=4)
+    log('------------------------------------------------------------------------------------------------------------------------')
     # log(f"SETTINGS = \n{json.dumps(settings, indent=4)}")
 
 
@@ -186,9 +173,14 @@ def create_backup(filename, extralog=""):
     if extralog != "":
         logstr = extralog + "\n" + logstr
     log(logstr)
-    directory = settings["SOURCE_FOLDER"]
+    rootdir = os.path.basename(settings["SOURCE_FOLDER"])
+    dirname = os.path.normpath(rootdir)
+    directory = f'./TMP_savemanager/{dirname}'
+    log("Making TMP copy of existing directory.")
+    copytree(settings["SOURCE_FOLDER"], directory)
+    log("Done.\nCreating 7z file...")
+    # directory = settings["SOURCE_FOLDER"]
     with py7zr.SevenZipFile(filename, "w") as archive:
-        rootdir = os.path.basename(directory)
         for dirpath, dirnames, filenames in os.walk(directory):
             for filename in filenames:
                 filepath = os.path.join(dirpath, filename)
@@ -196,6 +188,9 @@ def create_backup(filename, extralog=""):
                 arcname = os.path.join(rootdir, parentpath)
                 # log(f"Adding: {filepath}")
                 archive.write(filepath, arcname)
+    log("Done.\nRemoving TMP copy.")
+    rmtree(directory)
+    log("Done")
     get_current_backups()
 
 
@@ -211,12 +206,15 @@ def add_new_backup():
 
 
 @dump_args
-def restore_backup(filename: str):
+def restore_backup(filename: str, create_backup: bool):
     start = time.time()
     if os.path.exists(filename):
-        if os.path.exists(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}"):
-            os.remove(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}")
-        create_backup(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}", extralog=f'Creating safety backup: {settings["SAFETY_BACKUP"]}')
+        if create_backup:
+            if os.path.exists(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}"):
+                os.remove(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}")
+            create_backup(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}", extralog=f'Creating safety backup: {settings["SAFETY_BACKUP"]}')
+        else:
+            log("Skipping safety backup.")
     else:
         log(f"File: {filename} not found.")
         return
@@ -226,7 +224,7 @@ def restore_backup(filename: str):
     try:
         rmtree(settings['SOURCE_FOLDER'])
     except Exception as e:
-        print(e)
+        log(e)
     log(f"Restoring backup: {filename}")
     old_cwd = os.getcwd()
     os.chdir(f"{settings['SOURCE_FOLDER']}{os.sep}..")
@@ -275,7 +273,8 @@ def increase(filename: str) -> str:
 def get_current_highest() -> str:
     highest = f"{settings['FILE_NAME']}-1{settings['FILE_EXT']}"
     filelist = get_current_backups()
-    filelist.remove(settings['SAFETY_BACKUP'])
+    if settings['SAFETY_BACKUP'] in filelist:
+        filelist.remove(settings['SAFETY_BACKUP'])
     for filename in filelist:
         if get_number(filename) > get_number(highest):
             highest = filename
@@ -301,14 +300,17 @@ def main():
         elif event == "-BACKUP-":
             # create BACKUP
             add_new_backup()
+            log('------------------------------------------------------------------------------------------------------------------------')
 
         elif event == "-RESTORE-":
             # restore previous backup
             file = sg.popup_get_file("Select backup to restore", initial_folder=settings['DEST_FOLDER'], no_window=True)#, file_types=settings['FILE_EXT']
-            restore_backup(file) 
+            restore_backup(file, values["-MAKE_BACKUP-"]) 
+            log('------------------------------------------------------------------------------------------------------------------------')
 
         elif event == "-RESTORE_LATEST-":
-            restore_backup(f"{settings['DEST_FOLDER']}{os.sep}{get_current_highest()}")
+            restore_backup(f"{settings['DEST_FOLDER']}{os.sep}{get_current_highest()}", values["-MAKE_BACKUP-"])
+            log('------------------------------------------------------------------------------------------------------------------------')
             
         elif event == "-EVENTGOESHERE-":
             pass
