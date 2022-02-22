@@ -5,8 +5,18 @@ import py7zr
 import json
 from datetime import datetime
 import time
-from shutil import rmtree, copytree
+from shutil import copytree, rmtree
 from eakse.common import dump_args
+from eakse.quickcopy import FastCopy
+
+
+path_7zip = r"C:/Program Files/7-Zip/7z.exe"
+path_working = r"C:/###VS Projects/###TMP"
+slow_log_str = ""
+slow_log_cnt = 0
+slow_log_interval = 40
+progress_cnt = 0
+progress_max = 0
 
 
 def set_layout():
@@ -46,7 +56,7 @@ def set_layout():
                 key="-LOG-",
                 autoscroll=True,
                 disabled=True,
-                size=(120, 20),
+                size=(120, slow_log_interval+1),
             )
         ]
     ]
@@ -105,6 +115,20 @@ def log(text, debug=False):
             window["-LOG-"].print(f"         | {line}")
         window["-LOG-"].update()
         window.refresh()
+
+
+def slow_log(text):
+    global slow_log_str
+    global slow_log_cnt
+    slow_log_cnt += 1
+    if slow_log_str == '':
+        slow_log_str = text
+    else:
+        slow_log_str = f"{slow_log_str}\n{text}"
+    if slow_log_cnt == slow_log_interval:
+        slow_log_cnt = 0
+        log(slow_log_str)
+        slow_log_str = ''
 
 
 @dump_args
@@ -186,7 +210,7 @@ def create_backup(filename, extralog=""):
                 filepath = os.path.join(dirpath, filename)
                 parentpath = os.path.relpath(filepath, directory)
                 arcname = os.path.join(rootdir, parentpath)
-                # log(f"Adding: {filepath}")
+                slow_log(f"Adding: {filepath}")
                 archive.write(filepath, arcname)
     log("Done.\nRemoving TMP copy.")
     rmtree(directory)
@@ -206,10 +230,10 @@ def add_new_backup():
 
 
 @dump_args
-def restore_backup(filename: str, create_backup: bool):
+def restore_backup(filename: str, do_backup: bool):
     start = time.time()
     if os.path.exists(filename):
-        if create_backup:
+        if do_backup:
             if os.path.exists(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}"):
                 os.remove(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}")
             create_backup(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}", extralog=f'Creating safety backup: {settings["SAFETY_BACKUP"]}')

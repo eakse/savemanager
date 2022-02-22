@@ -1,0 +1,114 @@
+[
+    {
+        "type": "artifact_tool",
+        "id": "artifact_0",
+        "name": "Staff of the Repellent Necropolis",
+        "description": "This is the Staff of the Repellent Necropolis.\nIt is the only one of its kind.\nIt may have unknown powers; try activating them.",
+        "sym": "/",
+        "color": 917504,
+        "price": 0,
+        "materials": [
+            "wood"
+        ],
+        "volume": 7,
+        "weight": 1,
+        "melee_dam": 29,
+        "melee_cut": 0,
+        "m_to_hit": 1,
+        "item_flags": [],
+        "techniques": [],
+        "ammo": [],
+        "max_charges": 7,
+        "def_charges": 7,
+        "charges_per_use": 1,
+        "turns_per_charge": 0,
+        "charge_type": 4,
+        "charge_req": 0,
+        "effects_wielded": [
+
+        ],
+        "effects_activated": [
+            8,
+            4
+        ],
+        "effects_carried": [
+            5,
+            9,
+            19,
+            25],
+        "dream_unmet": [
+            "The %s is somehow vaguely dissatisfied even though it doesn't want anything.  Seeing this is a bug!"
+        ],
+        "dream_met": [
+            "The %s is satisfied, as it should be because it has no standards.  Seeing this is a bug!"
+        ]
+    },
+    {
+        "type": "artifact_armor",
+        "id": "artifact_1",
+        "name": "Helm of the Unspeakable Necropolis",
+        "description": "This is the Helm of the Unspeakable Necropolis.\nIt is the only one of its kind.",
+        "sym": "[",
+        "color": 3940352,
+        "price": 0,
+        "materials": [
+            "silver"
+        ],
+        "volume": 1,
+        "weight": 70,
+        "melee_dam": 8,
+        "melee_cut": 0,
+        "m_to_hit": -2,
+        "item_flags": [],
+        "techniques": [],
+        "covers": "000000000010",
+        "encumber": 0,
+        "max_encumber": 0,
+        "coverage": 99,
+        "material_thickness": 10,
+        "env_resist": 20,
+        "warmth": 1,
+        "storage": 10,
+        "power_armor": false,
+        "effects_worn": [
+            17,
+            39,
+            32
+        ]
+    },
+    {
+        "type": "artifact_armor",
+        "id": "artifact_2",
+        "name": "Gloves of the Shadowy Monolith",
+        "description": "This is the Gloves of the Shadowy Monolith.\nThey are the only ones of their kind.\nThey are extremely bulky.",
+        "sym": "[",
+        "color": 532480,
+        "price": 0,
+        "materials": [
+            "leather"
+        ],
+        "volume": 10,
+        "weight": 1250,
+        "melee_dam": -4,
+        "melee_cut": 0,
+        "m_to_hit": -2,
+        "item_flags": [],
+        "techniques": [],
+        "covers": "000011000000",
+        "encumber": 3,
+        "max_encumber": 1,
+        "coverage": 91,
+        "material_thickness": 4,
+        "env_resist": 1,
+        "warmth": 3,
+        "storage": 0,
+        "power_armor": false,
+        "effects_worn": [
+            36,
+            22,
+            8,
+            7,
+            37
+        ]
+    }
+]

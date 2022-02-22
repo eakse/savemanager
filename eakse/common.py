@@ -61,3 +61,10 @@ def get_encoding(filename):
     return result['encoding']
 
 
+@dump_args
+def sevenzip(path, zipname):
+    olddir = os.getcwd()
+    os.chdir(path)
+    system = subprocess.Popen([r"C:/Program Files/7-Zip/7z.exe", "a", "-bd", "-r", zipname, '.'])
+    os.chdir(olddir)
+    return system.communicate()
