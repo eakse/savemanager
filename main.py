@@ -14,7 +14,7 @@ path_7zip = r"C:/Program Files/7-Zip/7z.exe"
 path_working = r"C:/###VS Projects/###TMP"
 slow_log_str = ""
 slow_log_cnt = 0
-slow_log_interval = 40
+slow_log_interval = 30
 progress_cnt = 0
 progress_max = 0
 
@@ -79,7 +79,7 @@ def set_layout():
             sg.Listbox(
                 values=[],
                 enable_events=True,
-                size=(120, 20),
+                size=(120, 10),
                 key="-BACKUP LIST-",
                 # autoscroll=True,
             )
@@ -194,12 +194,15 @@ def settings_init():
 @dump_args
 def create_backup(filename, extralog=""):
     logstr = "Starting backup, application might freeze a bit..."
-    if extralog != "":
-        logstr = extralog + "\n" + logstr
-    log(logstr)
     rootdir = os.path.basename(settings["SOURCE_FOLDER"])
     dirname = os.path.normpath(rootdir)
     directory = f'./TMP_savemanager/{dirname}'
+    #create dirs to be safe
+    os.makedirs(rootdir, exist_ok=True)
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    if extralog != "":
+        logstr = extralog + "\n" + logstr
+    log(logstr)
     log("Making TMP copy of existing directory.")
     copytree(settings["SOURCE_FOLDER"], directory)
     log("Done.\nCreating 7z file...")
