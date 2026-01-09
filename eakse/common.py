@@ -1,7 +1,7 @@
 import inspect
 import os
 import subprocess, platform
-# import cchardet as chardet
+import chardet
 
 
 def clear_terminal():
@@ -28,7 +28,7 @@ def dump_args(func):
 
 
 @dump_args
-def get_files_from_path(path: str='.', extension: str=None) -> list:
+def get_files_from_path(path: str='.', extension: str="") -> list:
     """Traverse a path including subfolders to generate a list of filenames
 
     Args:
@@ -46,7 +46,7 @@ def get_files_from_path(path: str='.', extension: str=None) -> list:
     for subdir, dirs, files in os.walk(path):
         for filename in files:
             filepath = subdir + os.sep + filename
-            if extension == None:
+            if extension == "":
                 result.append(filepath)
             elif filename.lower().endswith(extension.lower()):
                 result.append(filepath)

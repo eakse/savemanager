@@ -1,4 +1,3 @@
-from xmlrpc.client import Boolean
 import PySimpleGUI as sg
 import os
 import py7zr
@@ -7,7 +6,7 @@ from datetime import datetime
 import time
 from shutil import copytree, rmtree
 from eakse.common import dump_args
-from eakse.quickcopy import FastCopy
+# from eakse.quickcopy import FastCopy
 
 
 path_7zip = "" #r"C:/Program Files/7-Zip/7z.exe"
@@ -108,12 +107,12 @@ def now():
 
 @dump_args
 def log(text, debug=False):
-    if debug == False or (debug == True and settings['SHOW_DEBUG'] == True):
+    if not debug or (debug and settings['SHOW_DEBUG']):
         lines = text.split("\n")
-        window["-LOG-"].print(f"{now()} | {lines[0]}")
+        window["-LOG-"].print(f"{now()} | {lines[0]}") # type: ignore
         for line in lines[1:]:
-            window["-LOG-"].print(f"         | {line}")
-        window["-LOG-"].update()
+            window["-LOG-"].print(f"         | {line}") # type: ignore
+        window["-LOG-"].update() # type: ignore
         window.refresh()
 
 
@@ -148,7 +147,7 @@ def update_size():
         for f in files:
             fp = os.path.join(path, f)
             size += os.path.getsize(fp)
-    window['-SIZE-'].update(f'Folder size: {sizeof_fmt(size)}')
+    window['-SIZE-'].update(f'Folder size: {sizeof_fmt(size)}') # type: ignore
 
 
 @dump_args
@@ -242,6 +241,7 @@ def restore_backup(filename: str, do_backup: bool):
         if do_backup:
             if os.path.exists(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}"):
                 os.remove(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}")
+            os.makedirs(settings['SOURCE_FOLDER'], exist_ok=True)
             create_backup(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}", extralog=f'Creating safety backup: {settings["SAFETY_BACKUP"]}')
         else:
             log("Skipping safety backup.")
@@ -257,11 +257,9 @@ def restore_backup(filename: str, do_backup: bool):
         log(f"Error deleting existing directory: {e}")
     log(f"Restoring backup: {filename}")
     old_cwd = os.getcwd()
-    if not os.path.exists(settings['SOURCE_FOLDER']):
-        os.makedirs(settings['SOURCE_FOLDER'], exist_ok=True)
-    os.chdir(f"{settings['SOURCE_FOLDER']}{os.sep}")
-    os.chdir("..")
-    # print(os.getcwd())
+    os.makedirs(settings['SOURCE_FOLDER'], exist_ok=True)
+    os.chdir(f"{settings['SOURCE_FOLDER']}{os.sep}..")
+    # os.chdir("..")
     with py7zr.SevenZipFile(f"{filename}", 'r') as archive:
         archive.extractall()
     log(f"Backup restored.\nTime elapsed: {time.time()-start:.2f} seconds")
@@ -283,7 +281,7 @@ def get_current_backups() -> list:
     result.sort(reverse=True)
     if os.path.exists(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}"):
         result.insert(0, settings['SAFETY_BACKUP'])
-    window["-BACKUP LIST-"].update(result)
+    window["-BACKUP LIST-"].update(result) # type: ignore
     update_size()
     window.refresh()
     return result
@@ -291,7 +289,7 @@ def get_current_backups() -> list:
 
 @dump_args
 def get_number(filename: str) -> int:
-    return filename.split(settings["FILE_NAME"])[1].split(settings["FILE_EXT"])[0]
+    return int(filename.split(settings["FILE_NAME"])[1].split(settings["FILE_EXT"])[0])
 
 
 @dump_args
@@ -318,8 +316,8 @@ def get_current_highest() -> str:
 def main():
     global settings
     settings_init()
-    window["-SOURCE-"].update(settings["SOURCE_FOLDER"])
-    window["-DEST-"].update(settings["DEST_FOLDER"])
+    window["-SOURCE-"].update(settings["SOURCE_FOLDER"]) # type: ignore
+    window["-DEST-"].update(settings["DEST_FOLDER"]) # type: ignore
     get_current_backups()
     # window.current_location((settings['X_POS'], settings['Y_POS']))
 
@@ -361,10 +359,11 @@ def main():
         elif event == "-BACKUP LIST-":  # A file was chosen from the listbox
             try:
                 filename = os.path.join(values["-FOLDER-"], values["-FILE LIST-"][0])
-                window["-TOUT-"].update(filename)
-                window["-IMAGE-"].update(filename=filename)
+                window["-TOUT-"].update(filename) # type: ignore
+                window["-IMAGE-"].update(filename=filename) # type: ignore
 
-            except:
+            except Exception as e:
+                log(f"Error on backup selection: {e}")
                 pass
 
     window.close()
