@@ -1,7 +1,7 @@
 import inspect
 import os
 import subprocess, platform
-import cchardet as chardet
+# import cchardet as chardet
 
 
 def clear_terminal():

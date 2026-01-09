@@ -1,4 +1,4 @@
 py7zr
 pysimplegui
-cchardet
+# cchardet
 tqdm

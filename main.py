@@ -10,8 +10,8 @@ from eakse.common import dump_args
 from eakse.quickcopy import FastCopy
 
 
-path_7zip = r"C:/Program Files/7-Zip/7z.exe"
-path_working = r"C:/###VS Projects/###TMP"
+path_7zip = "" #r"C:/Program Files/7-Zip/7z.exe"
+path_working = "" #r"C:/###VS Projects/###TMP"
 slow_log_str = ""
 slow_log_cnt = 0
 slow_log_interval = 30
@@ -204,20 +204,23 @@ def create_backup(filename, extralog=""):
         logstr = extralog + "\n" + logstr
     log(logstr)
     log("Making TMP copy of existing directory.")
-    copytree(settings["SOURCE_FOLDER"], directory)
-    log("Done.\nCreating 7z file...")
-    # directory = settings["SOURCE_FOLDER"]
-    with py7zr.SevenZipFile(filename, "w") as archive:
-        for dirpath, dirnames, filenames in os.walk(directory):
-            for filename in filenames:
-                filepath = os.path.join(dirpath, filename)
-                parentpath = os.path.relpath(filepath, directory)
-                arcname = os.path.join(rootdir, parentpath)
-                slow_log(f"Adding: {filepath}")
-                archive.write(filepath, arcname)
-    log("Done.\nRemoving TMP copy.")
-    rmtree(directory)
-    log("Done")
+    try:
+        copytree(settings["SOURCE_FOLDER"], directory)
+        # directory = settings["SOURCE_FOLDER"]
+        log("Done.\nCreating 7z file...")
+        with py7zr.SevenZipFile(filename, "w") as archive:
+            for dirpath, dirnames, filenames in os.walk(directory):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    parentpath = os.path.relpath(filepath, directory)
+                    arcname = os.path.join(rootdir, parentpath)
+                    slow_log(f"Adding: {filepath}")
+                    archive.write(filepath, arcname)
+        log("Done.\nRemoving TMP copy.")
+        rmtree(directory)
+        log("Done")
+    except Exception as e:
+        log(f"Error during backup: {e}")
     get_current_backups()
 
 
@@ -251,10 +254,13 @@ def restore_backup(filename: str, do_backup: bool):
     try:
         rmtree(settings['SOURCE_FOLDER'])
     except Exception as e:
-        log(e)
+        log(f"Error deleting existing directory: {e}")
     log(f"Restoring backup: {filename}")
     old_cwd = os.getcwd()
-    os.chdir(f"{settings['SOURCE_FOLDER']}{os.sep}..")
+    if not os.path.exists(settings['SOURCE_FOLDER']):
+        os.makedirs(settings['SOURCE_FOLDER'], exist_ok=True)
+    os.chdir(f"{settings['SOURCE_FOLDER']}{os.sep}")
+    os.chdir("..")
     # print(os.getcwd())
     with py7zr.SevenZipFile(f"{filename}", 'r') as archive:
         archive.extractall()
