@@ -1,4 +1,5 @@
-import PySimpleGUI as sg
+import tkinter as tk
+from tkinter import ttk, filedialog, scrolledtext
 import os
 import py7zr
 import json
@@ -6,11 +7,11 @@ from datetime import datetime
 import time
 from shutil import copytree, rmtree
 from eakse.common import dump_args
-# from eakse.quickcopy import FastCopy
+from eakse.theme import apply_dark_theme
 
 
-path_7zip = "" #r"C:/Program Files/7-Zip/7z.exe"
-path_working = "" #r"C:/###VS Projects/###TMP"
+path_7zip = "" 
+path_working = ""
 slow_log_str = ""
 slow_log_cnt = 0
 slow_log_interval = 30
@@ -18,86 +19,173 @@ progress_cnt = 0
 progress_max = 0
 
 
-def set_layout():
-    info = [
-        [
-            sg.Text('', key='-SIZE-', auto_size_text=True),
-
-        ]
-    ]
-
-    source = [
-        [
-            sg.Text("Source Folder     "),
-            sg.In(size=(40, 1), enable_events=True, key="-SOURCE-"),
-            sg.FolderBrowse(),
-        ]
-    ]
-
-    dest = [
-        [
-            sg.Text("Destination Folder"),
-            sg.In(size=(40, 1), enable_events=True, key="-DEST-"),
-            sg.FolderBrowse(),
-        ]
-    ]
-
-    backup = [[sg.Button("BACKUP", enable_events=True, key="-BACKUP-")]]
-
-    restore = [[sg.Button("RESTORE", enable_events=True, key="-RESTORE-")]]
-    restore_latest = [[sg.Button("RESTORE LATEST", enable_events=True, key="-RESTORE_LATEST-")]]
-    make_backup = [[sg.Checkbox('CREATE BACKUP', default=True, key="-MAKE_BACKUP-")]]
-
-
-    log_output = [
-        [
-            sg.Multiline(
-                key="-LOG-",
-                autoscroll=True,
-                disabled=True,
-                size=(120, slow_log_interval+1),
-            )
-        ]
-    ]
-
-    # ----- Full layout -----
-    layout = [
-        [
-            sg.Column(backup),
-            sg.VSeperator(),
-            sg.Column(restore),
-            sg.VSeparator(),            
-            sg.Column(restore_latest),
-            sg.VSeparator(),
-            sg.Column(make_backup),
-            sg.VSeparator(),
-            sg.Column(info)
-        ],
-        [sg.HorizontalSeparator()],
-        [
-            sg.Listbox(
-                values=[],
-                enable_events=True,
-                size=(120, 10),
-                key="-BACKUP LIST-",
-                # autoscroll=True,
-            )
-        ],
-        [sg.HorizontalSeparator()],
-        source,
-        dest,
-        [sg.HorizontalSeparator()],
-        log_output,
-    ]
-    return layout
-
-
 settings = {}
-sg.ChangeLookAndFeel("Black")
 settings_filename = "./savemanager_settings.json"
-window = sg.Window("Save Manager", set_layout())
-window.Font = ("Consolas", 8)
-window.finalize()
+# tkinter widgets
+root = tk.Tk()
+src_var = tk.StringVar()
+dest_var = tk.StringVar()
+make_backup_var = tk.BooleanVar(value=True)
+log_text = None
+size_label = None
+backups_listbox = None
+
+
+
+def create_gui():
+    """Create the tkinter GUI and wire event handlers to wrapper functions."""
+    global root, src_var, dest_var, make_backup_var, log_text, size_label, backups_listbox
+
+    root.title("Save Manager")
+    try:
+        result = apply_dark_theme(root)
+        if result:
+            log(result)
+    except Exception:
+        pass
+    # Set default position from settings if present
+    try:
+        x = settings.get('X_POS', 0)
+        y = settings.get('Y_POS', 0)
+        root.geometry(f"+{x}+{y}")
+    except Exception:
+        pass
+
+    # Top controls: Backup / Restore / Restore Latest / Create Backup checkbox / Size info
+    top_frame = ttk.Frame(root)
+    top_frame.pack(fill='x', padx=6, pady=6)
+
+    backup_btn = ttk.Button(top_frame, text="BACKUP", command=on_backup)
+    backup_btn.pack(side='left', padx=(0, 6))
+
+    restore_btn = ttk.Button(top_frame, text="RESTORE", command=on_restore)
+    restore_btn.pack(side='left', padx=(0, 6))
+
+    restore_latest_btn = ttk.Button(top_frame, text="RESTORE LATEST", command=on_restore_latest)
+    restore_latest_btn.pack(side='left', padx=(0, 6))
+
+    make_backup_cb = ttk.Checkbutton(top_frame, text='CREATE BACKUP', variable=make_backup_var)
+    make_backup_cb.pack(side='left', padx=(0, 6))
+
+    size_label = ttk.Label(top_frame, text='')
+    size_label.pack(side='right')
+
+    # Backups list
+    list_frame = ttk.Frame(root)
+    list_frame.pack(fill='both', expand=False, padx=6)
+    backups_listbox = tk.Listbox(list_frame, height=10, width=120)
+    backups_listbox.pack(side='left', fill='x', expand=True)
+    scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=backups_listbox.yview)
+    scrollbar.pack(side='right', fill='y')
+    backups_listbox.config(yscrollcommand=scrollbar.set)
+    backups_listbox.bind('<Double-Button-1>', on_backup_double_click)
+    # Apply dark styling to listbox (unselected background & selection colors)
+    try:
+        root._apply_dark_style(backups_listbox) # type: ignore
+        backups_listbox.config(selectbackground='#0e639c', selectforeground='#ffffff')
+    except Exception:
+        backups_listbox.config(bg='#252526', fg='#d4d4d4', selectbackground='#0e639c', selectforeground='#ffffff')
+
+    # Source / Destination entries
+    io_frame = ttk.Frame(root)
+    io_frame.pack(fill='x', padx=6, pady=6)
+
+    ttk.Label(io_frame, text='Source Folder').grid(row=0, column=0, sticky='w')
+    src_entry = ttk.Entry(io_frame, textvariable=src_var, width=60)
+    src_entry.grid(row=0, column=1, sticky='w')
+    src_browse = ttk.Button(io_frame, text='Browse', command=on_browse_source)
+    src_browse.grid(row=0, column=2, padx=(6,0))
+
+    ttk.Label(io_frame, text='Destination Folder').grid(row=1, column=0, sticky='w')
+    dest_entry = ttk.Entry(io_frame, textvariable=dest_var, width=60)
+    dest_entry.grid(row=1, column=1, sticky='w')
+    dest_browse = ttk.Button(io_frame, text='Browse', command=on_browse_dest)
+    dest_browse.grid(row=1, column=2, padx=(6,0))
+
+    # Log output
+    log_frame = ttk.Frame(root)
+    log_frame.pack(fill='both', expand=True, padx=6, pady=(0,6))
+    log_text = scrolledtext.ScrolledText(log_frame, height=slow_log_interval+1, wrap='word', state='disabled')
+    log_text.pack(fill='both', expand=True)
+    try:
+        root._apply_dark_style(log_text) # type: ignore
+    except Exception:
+        log_text.config(bg='#3c3c3c', fg='#d4d4d4', insertbackground='#d4d4d4')
+
+    # When entries change, update settings
+    def on_src_changed(*args):
+        settings['SOURCE_FOLDER'] = src_var.get()
+        save_settings()
+
+    def on_dest_changed(*args):
+        settings['DEST_FOLDER'] = dest_var.get()
+        save_settings()
+
+    src_var.trace_add('write', on_src_changed)
+    dest_var.trace_add('write', on_dest_changed)
+
+    # Close handler
+    def on_close():
+        try:
+            geom = root.winfo_geometry()
+            # geometry looks like 'WxH+X+Y'
+            if '+' in geom:
+                parts = geom.split('+')
+                settings['X_POS'] = int(parts[1])
+                settings['Y_POS'] = int(parts[2])
+                save_settings()
+        except Exception:
+            pass
+        root.destroy()
+
+    root.protocol('WM_DELETE_WINDOW', on_close)
+
+
+# Wrapper event handlers -------------------------------------------------
+
+def on_browse_source():
+    folder = filedialog.askdirectory(initialdir=settings.get('SOURCE_FOLDER', './'))
+    if folder:
+        src_var.set(folder)
+
+
+def on_browse_dest():
+    folder = filedialog.askdirectory(initialdir=settings.get('DEST_FOLDER', './'))
+    if folder:
+        dest_var.set(folder)
+
+
+def on_backup():
+    # Ensure settings reflect entries
+    settings['SOURCE_FOLDER'] = src_var.get()
+    settings['DEST_FOLDER'] = dest_var.get()
+    save_settings()
+    add_new_backup()
+    log('------------------------------------------------------------------------------------------------------------------------')
+
+
+def on_restore():
+    filename = filedialog.askopenfilename(initialdir=settings.get('DEST_FOLDER', './'), title='Select backup to restore')
+    if filename:
+        restore_backup(filename, make_backup_var.get())
+        log('------------------------------------------------------------------------------------------------------------------------')
+
+
+def on_restore_latest():
+    restore_backup(f"{settings['DEST_FOLDER']}{os.sep}{get_current_highest()}", make_backup_var.get())
+    log('------------------------------------------------------------------------------------------------------------------------')
+
+
+def on_backup_double_click(event=None):
+    sel = backups_listbox.curselection() # type: ignore
+    if not sel:
+        return
+    filename = backups_listbox.get(sel[0]) # type: ignore
+    # if it's the safety backup, use full path
+    fullpath = f"{settings['DEST_FOLDER']}{os.sep}{filename}"
+    restore_backup(fullpath, make_backup_var.get())
+    log('------------------------------------------------------------------------------------------------------------------------')
+
 
 
 @dump_args
@@ -107,13 +195,25 @@ def now():
 
 @dump_args
 def log(text, debug=False):
-    if not debug or (debug and settings['SHOW_DEBUG']):
+    if not debug or (debug and settings.get('SHOW_DEBUG')):
         lines = text.split("\n")
-        window["-LOG-"].print(f"{now()} | {lines[0]}") # type: ignore
+        timestamp = now()
+        if log_text is None:
+            # Fallback to printing to stdout
+            print(f"{timestamp} | {lines[0]}")
+            for line in lines[1:]:
+                print(f"         | {line}")
+            return
+        log_text.config(state='normal')
+        log_text.insert(tk.END, f"{timestamp} | {lines[0]}\n")
         for line in lines[1:]:
-            window["-LOG-"].print(f"         | {line}") # type: ignore
-        window["-LOG-"].update() # type: ignore
-        window.refresh()
+            log_text.insert(tk.END, f"         | {line}\n")
+        log_text.see(tk.END)
+        log_text.config(state='disabled')
+        try:
+            root.update()
+        except Exception:
+            pass
 
 
 def slow_log(text):
@@ -147,7 +247,11 @@ def update_size():
         for f in files:
             fp = os.path.join(path, f)
             size += os.path.getsize(fp)
-    window['-SIZE-'].update(f'Folder size: {sizeof_fmt(size)}') # type: ignore
+    txt = f'Folder size: {sizeof_fmt(size)}'
+    if size_label is not None:
+        size_label.config(text=txt)
+    else:
+        print(txt)
 
 
 @dump_args
@@ -281,9 +385,15 @@ def get_current_backups() -> list:
     result.sort(reverse=True)
     if os.path.exists(f"{settings['DEST_FOLDER']}{os.sep}{settings['SAFETY_BACKUP']}"):
         result.insert(0, settings['SAFETY_BACKUP'])
-    window["-BACKUP LIST-"].update(result) # type: ignore
+    if backups_listbox is not None:
+        backups_listbox.delete(0, tk.END)
+        for r in result:
+            backups_listbox.insert(tk.END, r)
     update_size()
-    window.refresh()
+    try:
+        root.update()
+    except Exception:
+        pass
     return result
 
 
@@ -316,57 +426,25 @@ def get_current_highest() -> str:
 def main():
     global settings
     settings_init()
-    window["-SOURCE-"].update(settings["SOURCE_FOLDER"]) # type: ignore
-    window["-DEST-"].update(settings["DEST_FOLDER"]) # type: ignore
+
+    # Create GUI and populate initial values
+    create_gui()
+    if src_var is not None:
+        src_var.set(settings.get('SOURCE_FOLDER', './'))
+    if dest_var is not None:
+        dest_var.set(settings.get('DEST_FOLDER', './'))
+    if make_backup_var is not None:
+        make_backup_var.set(settings.get('MAKE_BACKUP', True))
+
     get_current_backups()
-    # window.current_location((settings['X_POS'], settings['Y_POS']))
 
-    while True:
-        event, values = window.read()
-        if event == "Exit" or event == sg.WIN_CLOSED:
-            # settings['X_POS'] = window.current_location()[0]
-            # settings['Y_POS'] = window.current_location()[1]
-            break
+    # Enter tkinter main loop
+    try:
+        root.mainloop()
+    except Exception as e:
+        log(f"Error in GUI loop: {e}")
 
-        elif event == "-BACKUP-":
-            # create BACKUP
-            add_new_backup()
-            log('------------------------------------------------------------------------------------------------------------------------')
-
-        elif event == "-RESTORE-":
-            # restore previous backup
-            file = sg.popup_get_file("Select backup to restore", initial_folder=settings['DEST_FOLDER'], no_window=True)#, file_types=settings['FILE_EXT']
-            restore_backup(file, values["-MAKE_BACKUP-"]) 
-            log('------------------------------------------------------------------------------------------------------------------------')
-
-        elif event == "-RESTORE_LATEST-":
-            restore_backup(f"{settings['DEST_FOLDER']}{os.sep}{get_current_highest()}", values["-MAKE_BACKUP-"])
-            log('------------------------------------------------------------------------------------------------------------------------')
-            
-        elif event == "-EVENTGOESHERE-":
-            pass
-
-        elif event == "-SOURCE-":
-            # set SOURCE folder
-            settings["SOURCE_FOLDER"] = values["-SOURCE-"]
-            save_settings()
-
-        elif event == "-DEST-":
-            # set DEST folder
-            settings["DEST_FOLDER"] = values["-DEST-"]
-            save_settings()
-
-        elif event == "-BACKUP LIST-":  # A file was chosen from the listbox
-            try:
-                filename = os.path.join(values["-FOLDER-"], values["-FILE LIST-"][0])
-                window["-TOUT-"].update(filename) # type: ignore
-                window["-IMAGE-"].update(filename=filename) # type: ignore
-
-            except Exception as e:
-                log(f"Error on backup selection: {e}")
-                pass
-
-    window.close()
+    # saved on close via protocol handler
 
 
 if __name__ == "__main__":

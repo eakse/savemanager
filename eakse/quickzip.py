@@ -6,5 +6,6 @@ path_working = r"C:/###VS Projects/###TMP"
 outfile_name = "compressed.zip"
 os.chdir(path_working)
 
-def zipthis()
-ret = subprocess.check_output([path_7zip, "a", "-tzip", outfile_name])
+def zipthis():
+    ret = subprocess.check_output([path_7zip, "a", "-tzip", outfile_name])
+    return ret
