@@ -1,6 +1,7 @@
 import inspect
 import os
-import subprocess, platform
+import subprocess
+import platform
 import chardet
 
 
