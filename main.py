@@ -5,6 +5,7 @@ import py7zr
 import json
 from datetime import datetime
 import time
+import subprocess
 from shutil import copytree, rmtree
 from eakse.common import dump_args
 from eakse.theme import apply_dark_theme
@@ -25,16 +26,19 @@ settings_filename = "./savemanager_settings.json"
 root = tk.Tk()
 src_var = tk.StringVar()
 dest_var = tk.StringVar()
+app_path_var = tk.StringVar()
 make_backup_var = tk.BooleanVar(value=True)
 log_text = None
 size_label = None
 backups_listbox = None
+run_app_btn = None
+initializing = True
 
 
 
 def create_gui():
     """Create the tkinter GUI and wire event handlers to wrapper functions."""
-    global root, src_var, dest_var, make_backup_var, log_text, size_label, backups_listbox
+    global root, src_var, dest_var, app_path_var, make_backup_var, log_text, size_label, backups_listbox, run_app_btn
 
     root.title("Save Manager")
     try:
@@ -67,8 +71,22 @@ def create_gui():
     make_backup_cb = ttk.Checkbutton(top_frame, text='CREATE BACKUP', variable=make_backup_var)
     make_backup_cb.pack(side='left', padx=(0, 6))
 
+    # Run APP button moved to top-right, disabled by default; it will be enabled when a valid executable path is set.
+    run_app_btn = ttk.Button(top_frame, text="RUN APP", command=on_run_app, state='disabled')
+    run_app_btn.pack(side='right', padx=(6, 0))
+
     size_label = ttk.Label(top_frame, text='')
     size_label.pack(side='right')
+
+    # Initialize run_app_btn state based on saved settings
+    try:
+        app_path = settings.get('APP_PATH')
+        if app_path and os.path.exists(app_path) and os.access(app_path, os.X_OK):
+            run_app_btn.config(state='normal')
+        else:
+            run_app_btn.config(state='disabled')
+    except Exception:
+        run_app_btn.config(state='disabled')
 
     # Backups list
     list_frame = ttk.Frame(root)
@@ -86,7 +104,7 @@ def create_gui():
     except Exception:
         backups_listbox.config(bg='#252526', fg='#d4d4d4', selectbackground='#0e639c', selectforeground='#ffffff')
 
-    # Source / Destination entries
+    # Source / Destination / APP entries
     io_frame = ttk.Frame(root)
     io_frame.pack(fill='x', padx=6, pady=6)
 
@@ -102,6 +120,12 @@ def create_gui():
     dest_browse = ttk.Button(io_frame, text='Browse', command=on_browse_dest)
     dest_browse.grid(row=1, column=2, padx=(6,0))
 
+    ttk.Label(io_frame, text='Executable').grid(row=2, column=0, sticky='w')
+    app_entry = ttk.Entry(io_frame, textvariable=app_path_var, width=60)
+    app_entry.grid(row=2, column=1, sticky='w')
+    app_browse = ttk.Button(io_frame, text='Browse', command=on_select_app)
+    app_browse.grid(row=2, column=2, padx=(6,0))
+
     # Log output
     log_frame = ttk.Frame(root)
     log_frame.pack(fill='both', expand=True, padx=6, pady=(0,6))
@@ -115,14 +139,38 @@ def create_gui():
     # When entries change, update settings
     def on_src_changed(*args):
         settings['SOURCE_FOLDER'] = src_var.get()
+        if initializing:
+            return
         save_settings()
 
     def on_dest_changed(*args):
         settings['DEST_FOLDER'] = dest_var.get()
+        if initializing:
+            return
         save_settings()
+
+    def on_app_changed(*args):
+        settings['APP_PATH'] = app_path_var.get()
+        if initializing:
+            # still update run button state even during init
+            try:
+                path = app_path_var.get()
+                if run_app_btn is not None:
+                    run_app_btn.config(state='normal' if path and os.path.exists(path) and os.access(path, os.X_OK) else 'disabled')
+            except Exception:
+                pass
+            return
+        save_settings()
+        try:
+            path = app_path_var.get()
+            if run_app_btn is not None:
+                run_app_btn.config(state='normal' if path and os.path.exists(path) and os.access(path, os.X_OK) else 'disabled')
+        except Exception:
+            pass
 
     src_var.trace_add('write', on_src_changed)
     dest_var.trace_add('write', on_dest_changed)
+    app_path_var.trace_add('write', on_app_changed)
 
     # Close handler
     def on_close():
@@ -155,25 +203,61 @@ def on_browse_dest():
         dest_var.set(folder)
 
 
+def on_select_app():
+    filename = filedialog.askopenfilename(title='Select executable',
+                                          initialdir=os.path.dirname(settings.get('APP_PATH', '')) if settings.get('APP_PATH') else settings.get('SOURCE_FOLDER', './'))
+    if filename:
+        app_path_var.set(filename)
+        log(f"Selected executable: {filename}")
+
+
+def on_run_app():
+    path = settings.get('APP_PATH', '')
+    if not path:
+        log('No executable selected. Please select an executable first.')
+        return
+    if not os.path.exists(path):
+        log(f'Executable not found: {path}')
+        try:
+            if run_app_btn is not None:
+                run_app_btn.config(state='disabled')
+        except Exception:
+            pass
+        return
+    if not os.access(path, os.X_OK):
+        log(f'File is not executable: {path}')
+        try:
+            if run_app_btn is not None:
+                run_app_btn.config(state='disabled')
+        except Exception:
+            pass
+        return
+    try:
+        subprocess.Popen([path])  # start separate process
+        log(f'Started executable: {path}')
+    except Exception as e:
+        log(f'Error starting executable: {e}')
+
+
 def on_backup():
     # Ensure settings reflect entries
     settings['SOURCE_FOLDER'] = src_var.get()
     settings['DEST_FOLDER'] = dest_var.get()
     save_settings()
     add_new_backup()
-    log('------------------------------------------------------------------------------------------------------------------------')
+    log('----------------------------------------------------------------------------------------------------------------------')
 
 
 def on_restore():
     filename = filedialog.askopenfilename(initialdir=settings.get('DEST_FOLDER', './'), title='Select backup to restore')
     if filename:
         restore_backup(filename, make_backup_var.get())
-        log('------------------------------------------------------------------------------------------------------------------------')
+        log('----------------------------------------------------------------------------------------------------------------------')
 
 
 def on_restore_latest():
     restore_backup(f"{settings['DEST_FOLDER']}{os.sep}{get_current_highest()}", make_backup_var.get())
-    log('------------------------------------------------------------------------------------------------------------------------')
+    log('----------------------------------------------------------------------------------------------------------------------')
 
 
 def on_backup_double_click(event=None):
@@ -184,7 +268,7 @@ def on_backup_double_click(event=None):
     # if it's the safety backup, use full path
     fullpath = f"{settings['DEST_FOLDER']}{os.sep}{filename}"
     restore_backup(fullpath, make_backup_var.get())
-    log('------------------------------------------------------------------------------------------------------------------------')
+    log('----------------------------------------------------------------------------------------------------------------------')
 
 
 
@@ -260,7 +344,7 @@ def load_settings(filename=settings_filename):
     log(f"Loading settings from {filename}")
     with open(filename) as infile:
         settings = json.load(infile)
-    log('------------------------------------------------------------------------------------------------------------------------')
+    log('----------------------------------------------------------------------------------------------------------------------')
     # log(f"SETTINGS = \n{json.dumps(settings, indent=4)}")
 
 
@@ -269,7 +353,7 @@ def save_settings(filename=settings_filename):
     log(f"Saving settings to {filename}")
     with open(filename, "w") as outfile:
         json.dump(settings, outfile, indent=4)
-    log('------------------------------------------------------------------------------------------------------------------------')
+    log('----------------------------------------------------------------------------------------------------------------------')
     # log(f"SETTINGS = \n{json.dumps(settings, indent=4)}")
 
 
@@ -286,6 +370,7 @@ def settings_init():
             "FILE_ENU": "",
             "SOURCE_FOLDER": "./",
             "DEST_FOLDER": "./",
+            "APP_PATH": "",
             "SHOW_DEBUG": True,
             "X_POS": 0,
             "Y_POS": 0,
@@ -311,6 +396,7 @@ def create_backup(filename, extralog=""):
         copytree(settings["SOURCE_FOLDER"], directory)
         # directory = settings["SOURCE_FOLDER"]
         log("Done.\nCreating 7z file...")
+        filecount = 0
         with py7zr.SevenZipFile(filename, "w") as archive:
             for dirpath, dirnames, filenames in os.walk(directory):
                 for filename in filenames:
@@ -319,6 +405,8 @@ def create_backup(filename, extralog=""):
                     arcname = os.path.join(rootdir, parentpath)
                     slow_log(f"Adding: {filepath}")
                     archive.write(filepath, arcname)
+                    filecount += 1
+        log(f"Added {filecount} files.\nFinalizing 7z file...")
         log("Done.\nRemoving TMP copy.")
         rmtree(directory)
         log("Done")
@@ -433,10 +521,16 @@ def main():
         src_var.set(settings.get('SOURCE_FOLDER', './'))
     if dest_var is not None:
         dest_var.set(settings.get('DEST_FOLDER', './'))
+    if app_path_var is not None:
+        app_path_var.set(settings.get('APP_PATH', ''))
     if make_backup_var is not None:
         make_backup_var.set(settings.get('MAKE_BACKUP', True))
 
     get_current_backups()
+
+    # finished initialization - allow settings to be saved on change
+    global initializing
+    initializing = False
 
     # Enter tkinter main loop
     try:
