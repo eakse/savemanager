@@ -2,11 +2,11 @@
     "FILE_EXT": ".7z",
     "FILE_NAME": "BACKUP_",
     "FILE_ENU": "",
-    "SOURCE_FOLDER": "/home/eakse/Applications/cataclysm-tlg-1.0/save/Thermalito",
+    "SOURCE_FOLDER": "/home/eakse/Applications/cataclysm-tlg-1.0/save/Crucero",
     "DEST_FOLDER": "/home/eakse/savemanager_saves",
-    "EXE_PATH": "/home/eakse/Applications/cataclysm-tlg-1.0/cataclysm-launcher",
+    "APP_PATH": "/home/eakse/Applications/cataclysm-tlg-1.0/cataclysm-launcher",
     "SHOW_DEBUG": false,
-    "X_POS": 406,
+    "X_POS": 461,
     "Y_POS": 173,
     "SAFETY_BACKUP": "SAFETY_BACKUP.7z"
 }
