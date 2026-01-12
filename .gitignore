@@ -3,6 +3,7 @@ workspace.code-workspace
 .vscode/
 backup/
 backups/
+savemanager_settings.json
 
 
 # Byte-compiled / optimized / DLL files
