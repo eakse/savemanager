@@ -13,17 +13,12 @@ import tempfile
 
 
 class SaveManagerApp:
-    """Class-based Save Manager application.
-
-    Globals were moved to class/instance variables. GUI is created with frames
-    and previously top-level functions are now instance methods.
-    """
-
+    # Class constants
     settings_filename = "./savemanager_settings.json"
     slow_log_interval = 30
 
     def __init__(self):
-        # runtime state (formerly module globals)
+        # runtime state
         self.path_7zip = ""
         self.path_working = ""
         self.slow_log_str = ""
@@ -51,7 +46,7 @@ class SaveManagerApp:
         # Load settings before building GUI so initial state is known
         self.settings_init()
 
-        # Build GUI (previously in create_gui)
+        # Build GUI
         self.root.title("Save Manager")
 
         try:
@@ -454,7 +449,7 @@ class SaveManagerApp:
         self.log(logstr)
         self.log("Making TMP copy of existing directory.")
         try:
-            copytree(self.settings["SOURCE_FOLDER"], tmp_directory)
+            copytree(self.settings["SOURCE_FOLDER"], tmp_directory, dirs_exist_ok=True)
             self.log("Done.\nCreating 7z file...")
             filecount = 0
             with py7zr.SevenZipFile(filename, "w") as archive:
