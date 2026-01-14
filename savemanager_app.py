@@ -9,6 +9,7 @@ from shutil import copytree, rmtree
 from eakse.common import dump_args
 from eakse.theme import apply_dark_theme
 from eakse.spawn_subprocess import start_executable
+import tempfile
 
 
 class SaveManagerApp:
@@ -443,8 +444,8 @@ class SaveManagerApp:
     def create_backup(self, filename, extralog=""):
         logstr = "Starting backup, application might freeze a bit..."
         rootdir = os.path.basename(self.settings["SOURCE_FOLDER"])
-        dirname = os.path.normpath(rootdir)
-        directory = f"./TMP_savemanager/{dirname}"
+        # dirname = os.path.normpath(rootdir)
+        tmp_directory = tempfile.mkdtemp(prefix="eakse_") #f"./TMP_savemanager/{dirname}"
         # create dirs to be safe
         os.makedirs(rootdir, exist_ok=True)
         os.makedirs(os.path.dirname(filename), exist_ok=True)
@@ -453,21 +454,21 @@ class SaveManagerApp:
         self.log(logstr)
         self.log("Making TMP copy of existing directory.")
         try:
-            copytree(self.settings["SOURCE_FOLDER"], directory)
+            copytree(self.settings["SOURCE_FOLDER"], tmp_directory)
             self.log("Done.\nCreating 7z file...")
             filecount = 0
             with py7zr.SevenZipFile(filename, "w") as archive:
-                for dirpath, dirnames, filenames in os.walk(directory):
+                for dirpath, dirnames, filenames in os.walk(tmp_directory):
                     for filename in filenames:
                         filepath = os.path.join(dirpath, filename)
-                        parentpath = os.path.relpath(filepath, directory)
+                        parentpath = os.path.relpath(filepath, tmp_directory)
                         arcname = os.path.join(rootdir, parentpath)
                         self.slow_log(f"Adding: {filepath}")
                         archive.write(filepath, arcname)
                         filecount += 1
             self.log(f"Added {filecount} files.\nFinalizing 7z file...")
             self.log("Done.\nRemoving TMP copy.")
-            rmtree(directory)
+            rmtree(tmp_directory)
             self.log("Done")
         except Exception as e:
             self.log(f"Error during backup: {e}")
