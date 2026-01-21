@@ -1,3 +1,12 @@
+def apply_theme_to_all(widget):
+    """Recursively apply the helper style to a widget and all its children."""
+    if hasattr(widget.winfo_toplevel(), '_apply_dark_style'):
+        widget.winfo_toplevel()._apply_dark_style(widget)
+    
+    for child in widget.winfo_children():
+        apply_theme_to_all(child)
+
+
 def apply_dark_theme(root) -> str | None:
     """
     Apply a simple VS Code-like dark theme to a tkinter root and ttk styles.

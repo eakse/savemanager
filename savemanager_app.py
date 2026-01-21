@@ -6,7 +6,8 @@ import json
 from datetime import datetime
 import time
 from shutil import copytree, rmtree
-from eakse.common import dump_args
+import eakse
+from eakse.util import dump_args # type: ignore
 from eakse.theme import apply_dark_theme
 from eakse.spawn_subprocess import start_executable
 import tempfile
@@ -16,6 +17,20 @@ class SaveManagerApp:
     # Class constants
     settings_filename = "./savemanager_settings.json"
     slow_log_interval = 30
+    settings = {
+        "FILE_EXT": "",
+        "FILE_NAME": "",
+        "FILE_ENU": "",
+        "SOURCE_FOLDER": "",
+        "DEST_FOLDER": "",
+        "APP_PATH": "",
+        "SHOW_DEBUG": False,
+        "X_POS": 0,
+        "Y_POS": 0,
+        "SAFETY_BACKUP": "SAFETY_BACKUP.7z,",
+        "MAKE_BACKUP": True,
+    }
+
 
     def __init__(self):
         # runtime state
@@ -25,8 +40,6 @@ class SaveManagerApp:
         self.slow_log_cnt = 0
         self.progress_cnt = 0
         self.progress_max = 0
-
-        self.settings = {}
 
         # tkinter root and variables
         self.root = tk.Tk()
@@ -45,6 +58,9 @@ class SaveManagerApp:
 
         # Load settings before building GUI so initial state is known
         self.settings_init()
+        self.debug = self.settings["SHOW_DEBUG"]
+        eakse.util.debug = self.debug # type: ignore
+        
 
         # Build GUI
         self.root.title("Save Manager")
@@ -58,8 +74,8 @@ class SaveManagerApp:
 
         # Set default position from settings if present
         try:
-            x = self.settings.get("X_POS", 0)
-            y = self.settings.get("Y_POS", 0)
+            x = self.settings["X_POS"]
+            y = self.settings["Y_POS"]
             self.root.geometry(f"+{x}+{y}")
         except Exception:
             pass
@@ -95,7 +111,7 @@ class SaveManagerApp:
 
         # Initialize run_app_btn state based on saved settings
         try:
-            app_path = self.settings.get("APP_PATH")
+            app_path = self.settings["APP_PATH"]
             if app_path and os.path.exists(app_path) and os.access(app_path, os.X_OK):
                 self.run_app_btn.config(state="normal")
             else:
@@ -227,14 +243,14 @@ class SaveManagerApp:
     # Event handlers -----------------------------------------------------
     def on_browse_source(self):
         folder = filedialog.askdirectory(
-            initialdir=self.settings.get("SOURCE_FOLDER", "./")
+            initialdir=self.settings["SOURCE_FOLDER"]
         )
         if folder:
             self.src_var.set(folder)
 
     def on_browse_dest(self):
         folder = filedialog.askdirectory(
-            initialdir=self.settings.get("DEST_FOLDER", "./")
+            initialdir=self.settings["DEST_FOLDER"]
         )
         if folder:
             self.dest_var.set(folder)
@@ -242,16 +258,16 @@ class SaveManagerApp:
     def on_select_app(self):
         filename = filedialog.askopenfilename(
             title="Select executable",
-            initialdir=os.path.dirname(self.settings.get("APP_PATH", ""))
-            if self.settings.get("APP_PATH")
-            else self.settings.get("SOURCE_FOLDER", "./"),
+            initialdir=os.path.dirname(self.settings["APP_PATH"])
+            if self.settings["APP_PATH"]
+            else self.settings["SOURCE_FOLDER"]
         )
         if filename:
             self.app_path_var.set(filename)
             self.log(f"Selected executable: {filename}")
 
     def on_run_app(self):
-        path = self.settings.get("APP_PATH", "")
+        path = self.settings["APP_PATH"]
         if not path:
             self.log("No executable selected. Please select an executable first.")
             return
@@ -289,7 +305,7 @@ class SaveManagerApp:
 
     def on_restore(self):
         filename = filedialog.askopenfilename(
-            initialdir=self.settings.get("DEST_FOLDER", "./"),
+            initialdir=self.settings["DEST_FOLDER"],
             title="Select backup to restore",
         )
         if filename:
@@ -326,7 +342,7 @@ class SaveManagerApp:
 
     @dump_args
     def log(self, text, debug=False):
-        if not debug or (debug and self.settings.get("SHOW_DEBUG")):
+        if not debug or (debug and self.settings["SHOW_DEBUG"]) or self.debug:
             lines = text.split("\n")
             timestamp = self.now()
             if self.log_text is None:
@@ -368,7 +384,7 @@ class SaveManagerApp:
 
     @dump_args
     def update_size(self):
-        src = self.settings.get("SOURCE_FOLDER", "")
+        src = self.settings["SOURCE_FOLDER"]
         if not src or not os.path.exists(src):
             txt = "Source folder not found"
             if self.size_label is not None:
@@ -546,7 +562,6 @@ class SaveManagerApp:
     def get_number(self, filename: str) -> int:
         raw = filename.split(self.settings["FILE_NAME"])[1].split(self.settings["FILE_EXT"])[0]
         number = int("".join(ch for ch in raw if ch.isdigit()))
-        print(f"Extracted number {number} from filename {filename}")
         return number
 
     @dump_args
@@ -569,13 +584,13 @@ class SaveManagerApp:
         # Initialization already performed in __init__ (settings loaded and GUI built).
         # Populate variable values from settings for the GUI.
         if self.src_var is not None:
-            self.src_var.set(self.settings.get("SOURCE_FOLDER", "./"))
+            self.src_var.set(self.settings["SOURCE_FOLDER"])
         if self.dest_var is not None:
-            self.dest_var.set(self.settings.get("DEST_FOLDER", "./"))
+            self.dest_var.set(self.settings["DEST_FOLDER"])
         if self.app_path_var is not None:
-            self.app_path_var.set(self.settings.get("APP_PATH", ""))
+            self.app_path_var.set(self.settings["APP_PATH"])
         if self.make_backup_var is not None:
-            self.make_backup_var.set(self.settings.get("MAKE_BACKUP", True))
+            self.make_backup_var.set(self.settings["MAKE_BACKUP"])
 
         self.get_current_backups()
 
